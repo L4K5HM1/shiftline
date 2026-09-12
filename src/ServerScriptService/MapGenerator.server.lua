@@ -23,7 +23,6 @@
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CollectionService = game:GetService("CollectionService")
 
 local CarConfig = require(ReplicatedStorage:WaitForChild("CarConfig"))
 
@@ -135,29 +134,6 @@ local function createDealership(brandName, position, color)
 	lot.Parent = mapFolder
 
 	addLabel(building, brandInfo.displayName:upper() .. " DEALERSHIP", color)
-
-	-- A small sign in front of the building (toward the map center) — this is
-	-- what the ProximityPrompt actually attaches to. Using a small part here
-	-- (instead of the huge 40x40 building) means players can actually walk
-	-- close enough to trigger it.
-	local towardCenter = (Vector3.new(0, 0, 0) - position).Unit
-	local signPosition = position + towardCenter * 26 + Vector3.new(0, 4, 0)
-
-	local sign = Instance.new("Part")
-	sign.Name = brandName .. "PickupSign"
-	sign.Size = Vector3.new(6, 8, 1)
-	sign.Position = signPosition
-	sign.Anchored = true
-	sign.Material = Enum.Material.Neon
-	sign.Color = color
-	sign.Parent = mapFolder
-
-	addLabel(sign, "PICK UP " .. brandInfo.displayName:upper(), color)
-
-	-- Tag the SIGN (not the building) so DealershipInteraction.server.lua
-	-- attaches its "Pick Up Car" ProximityPrompt somewhere actually reachable.
-	CollectionService:AddTag(sign, "DealershipTrigger")
-	sign:SetAttribute("Brand", brandName)
 end
 
 local function createJobLocation(name, position, color)
@@ -171,25 +147,6 @@ local function createJobLocation(name, position, color)
 	station.Parent = mapFolder
 
 	addLabel(station, "JOB: " .. name, color)
-
-	-- Small sign next to the station for the ProximityPrompt to attach to
-	-- (same reasoning as dealerships — keeps activation range reliable).
-	local towardCenter = (Vector3.new(0, 0, 0) - position).Unit
-	local signPosition = position + towardCenter * 12 + Vector3.new(0, 4, 0)
-
-	local sign = Instance.new("Part")
-	sign.Name = name:gsub("%s+", "") .. "Sign"
-	sign.Size = Vector3.new(4, 6, 1)
-	sign.Position = signPosition
-	sign.Anchored = true
-	sign.Material = Enum.Material.Neon
-	sign.Color = color
-	sign.Parent = mapFolder
-
-	addLabel(sign, "START: " .. name, color)
-
-	CollectionService:AddTag(sign, "JobTrigger")
-	sign:SetAttribute("JobType", name)
 end
 
 -- === Dealership location pool: 8 possible spots, only 4 used per server ===
