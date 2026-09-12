@@ -51,17 +51,11 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local gameFrame = Instance.new("Frame")
 gameFrame.Name = "GameFrame"
-gameFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-gameFrame.Size = UDim2.new(0.34, 0, 0.68, 0)
-gameFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+gameFrame.Size = UDim2.new(0, 420, 0, 520)
+gameFrame.Position = UDim2.new(0.5, -210, 0.5, -260)
 gameFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 gameFrame.Visible = false
 gameFrame.Parent = screenGui
-
-local gameFrameSizeConstraint = Instance.new("UISizeConstraint")
-gameFrameSizeConstraint.MinSize = Vector2.new(340, 440)
-gameFrameSizeConstraint.MaxSize = Vector2.new(460, 580)
-gameFrameSizeConstraint.Parent = gameFrame
 
 local gameFrameCorner = Instance.new("UICorner")
 gameFrameCorner.CornerRadius = UDim.new(0, 14)
@@ -107,14 +101,14 @@ movesLabel.Parent = gameFrame
 -- Grid container
 local gridFrame = Instance.new("Frame")
 gridFrame.Name = "GridFrame"
-gridFrame.Size = UDim2.new(1, -32, 1, -160)
+gridFrame.Size = UDim2.new(1, -32, 0, 388)
 gridFrame.Position = UDim2.new(0, 16, 0, 80)
 gridFrame.BackgroundTransparency = 1
 gridFrame.Parent = gameFrame
 
 local gridLayout = Instance.new("UIGridLayout")
-gridLayout.CellSize = UDim2.new(0.23, 0, 0.23, 0)
-gridLayout.CellPadding = UDim2.new(0.02, 0, 0.02, 0)
+gridLayout.CellSize = UDim2.new(0, 88, 0, 88)
+gridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
 gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 gridLayout.Parent = gridFrame
 
