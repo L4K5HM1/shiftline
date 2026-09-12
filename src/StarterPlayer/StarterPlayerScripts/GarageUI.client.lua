@@ -21,9 +21,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local TextService = game:GetService("TextService")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 
@@ -136,42 +133,6 @@ local closeButtonCorner = Instance.new("UICorner")
 closeButtonCorner.CornerRadius = UDim.new(0, 8)
 closeButtonCorner.Parent = closeButton
 
--- === Make the panel draggable by clicking/dragging the header ===
-headerFrame.Active = true
-
-local dragging = false
-local dragInput, dragStartMousePos, dragStartFramePos
-
-headerFrame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStartMousePos = input.Position
-		dragStartFramePos = garageFrame.Position
-
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-headerFrame.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if dragging and input == dragInput then
-		local delta = input.Position - dragStartMousePos
-		garageFrame.Position = UDim2.new(
-			dragStartFramePos.X.Scale, dragStartFramePos.X.Offset + delta.X,
-			dragStartFramePos.Y.Scale, dragStartFramePos.Y.Offset + delta.Y
-		)
-	end
-end)
-
 -- Brand tab bar
 local tabBar = Instance.new("Frame")
 tabBar.Name = "TabBar"
@@ -190,8 +151,8 @@ local tabButtons = {} -- [brandName] = button, for highlight state
 -- Scrolling car list
 local carListFrame = Instance.new("ScrollingFrame")
 carListFrame.Name = "CarList"
-carListFrame.Size = UDim2.new(1, -32, 1, -174)
-carListFrame.Position = UDim2.new(0, 16, 0, 114)
+carListFrame.Size = UDim2.new(1, -32, 1, -160)
+carListFrame.Position = UDim2.new(0, 16, 0, 100)
 carListFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
 carListFrame.BorderSizePixel = 0
 carListFrame.ScrollBarThickness = 6
@@ -226,18 +187,6 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 14
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = garageFrame
-
-local hintLabel = Instance.new("TextLabel")
-hintLabel.Name = "HintLabel"
-hintLabel.Size = UDim2.new(1, -32, 0, 16)
-hintLabel.Position = UDim2.new(0, 16, 0, 96)
-hintLabel.BackgroundTransparency = 1
-hintLabel.Text = "Own it here, then visit the dealership in the world to actually drive it."
-hintLabel.TextColor3 = Color3.fromRGB(140, 140, 148)
-hintLabel.Font = Enum.Font.Gotham
-hintLabel.TextSize = 12
-hintLabel.TextXAlignment = Enum.TextXAlignment.Left
-hintLabel.Parent = garageFrame
 
 -- === Helpers ===
 
@@ -298,66 +247,6 @@ end
 local function showStatus(text, isError)
 	statusLabel.Text = text
 	statusLabel.TextColor3 = isError and Color3.fromRGB(230, 100, 100) or Color3.fromRGB(120, 220, 140)
-end
-
---[[ Top-of-screen toast — always renders in front of the Garage panel (and
-     everything else), regardless of scroll position or panel dragging.
-     Used for feedback like "Not enough cash" so it can't get missed/covered. ]]
-local activeToast = nil
-
-local function showToast(text, isError)
-	-- If a toast is already showing, remove it instantly so they don't stack
-	if activeToast then
-		activeToast:Destroy()
-		activeToast = nil
-	end
-
-	local font = Enum.Font.GothamBold
-	local textSize = 16
-	local maxWidth = 380
-	local horizontalPadding = 24
-	local verticalPadding = 14
-
-	local textBounds = TextService:GetTextSize(text, textSize, font, Vector2.new(maxWidth, math.huge))
-	local toastWidth = math.min(maxWidth, textBounds.X + horizontalPadding * 2)
-	local toastHeight = textBounds.Y + verticalPadding * 2
-
-	local toast = Instance.new("TextLabel")
-	toast.ZIndex = 100 -- guaranteed to render above the Garage panel and everything else
-	toast.Size = UDim2.new(0, toastWidth, 0, toastHeight)
-	toast.Position = UDim2.new(0.5, -toastWidth / 2, 0, -toastHeight - 20)
-	toast.BackgroundColor3 = isError and Color3.fromRGB(150, 45, 45) or Color3.fromRGB(40, 120, 60)
-	toast.BackgroundTransparency = 0.05
-	toast.Text = text
-	toast.TextWrapped = true
-	toast.TextColor3 = Color3.fromRGB(255, 255, 255)
-	toast.Font = font
-	toast.TextSize = textSize
-	toast.Parent = screenGui
-
-	local toastCorner = Instance.new("UICorner")
-	toastCorner.CornerRadius = UDim.new(0, 10)
-	toastCorner.Parent = toast
-
-	activeToast = toast
-
-	local slideIn = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Position = UDim2.new(0.5, -toastWidth / 2, 0, 20),
-	})
-	slideIn:Play()
-
-	task.delay(2.5, function()
-		if activeToast ~= toast then return end -- a newer toast already replaced this one
-		local slideOut = TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Position = UDim2.new(0.5, -toastWidth / 2, 0, -toastHeight - 20),
-		})
-		slideOut:Play()
-		slideOut.Completed:Wait()
-		if activeToast == toast then
-			activeToast = nil
-		end
-		toast:Destroy()
-	end)
 end
 
 -- Forward-declared so buttons can trigger a re-render after purchase/select
@@ -425,11 +314,18 @@ local function createCarCard(brand, model)
 		actionButton.BackgroundColor3 = Color3.fromRGB(70, 70, 78)
 		actionButton.Active = false
 	elseif isOwned(brand, model.name) then
-		actionButton.Text = "OWNED"
-		actionButton.BackgroundColor3 = Color3.fromRGB(60, 90, 110)
-		actionButton.Active = false
-		-- Player already owns this car, but picking it as their current ride
-		-- now happens physically at the dealership (ProximityPrompt), not here.
+		actionButton.Text = "SELECT"
+		actionButton.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
+		actionButton.MouseButton1Click:Connect(function()
+			actionButton.Active = false
+			local success, message = selectCarFunction:InvokeServer(brand, model.name)
+			showStatus(message, not success)
+			if success then
+				localData.CurrentCar = { Brand = brand, Model = model.name }
+				renderBrand(selectedBrand) -- refresh so "CURRENT CAR" state updates
+			end
+			actionButton.Active = true
+		end)
 	else
 		actionButton.Text = model.price == 0 and "FREE" or ("BUY " .. formatMoney(model.price))
 		actionButton.BackgroundColor3 = Color3.fromRGB(210, 160, 40)
@@ -437,10 +333,9 @@ local function createCarCard(brand, model)
 			actionButton.Active = false
 			local success, message = purchaseCarFunction:InvokeServer(brand, model.name)
 			showStatus(message, not success)
-			showToast(message, not success)
 			if success then
 				localData.OwnedCars[brand .. "_" .. model.name] = true
-				renderBrand(selectedBrand) -- refresh so it now shows OWNED
+				renderBrand(selectedBrand) -- refresh so it now shows SELECT
 			end
 			actionButton.Active = true
 		end)
@@ -511,13 +406,7 @@ local function refreshPlayerDataAndOpen()
 	renderBrand(selectedBrand)
 end
 
-garageToggleButton.MouseButton1Click:Connect(function()
-	if garageFrame.Visible then
-		garageFrame.Visible = false
-	else
-		refreshPlayerDataAndOpen()
-	end
-end)
+garageToggleButton.MouseButton1Click:Connect(refreshPlayerDataAndOpen)
 
 closeButton.MouseButton1Click:Connect(function()
 	garageFrame.Visible = false
