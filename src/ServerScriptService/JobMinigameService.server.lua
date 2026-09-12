@@ -60,15 +60,6 @@ local PAYOUT_CONFIG = {
 		minSeconds = 5, -- can't legitimately solve 10 problems faster than this
 		maxSeconds = 180,
 	},
-	["Pattern Memory"] = {
-		type = "higherIsBetter",
-		basePayout = 25,
-		floorPayout = 8,
-		minValue = 0,   -- failed on round 1 (or never got past it)
-		maxValue = 10,  -- survived all 10 rounds
-		minSeconds = 5, -- can't legitimately clear multiple rounds faster than this
-		maxSeconds = 240,
-	},
 }
 
 -- === RemoteFunctions setup ===
@@ -96,23 +87,10 @@ end
 -- === Active sessions: [player] = { jobType = string, startTime = number } ===
 local activeSessions = {}
 
--- Cooldown duration — actual timestamps are now stored persistently in
--- PlayerDataService (via GetCooldownRemaining / SetCooldown), so this
--- survives players leaving, rejoining, or switching servers.
-local COOLDOWN_SECONDS = 60
-
 startJobFunction.OnServerInvoke = function(player, jobType)
 	local config = PAYOUT_CONFIG[jobType]
 	if not config then
 		return false, "Unknown job type."
-	end
-
-	-- Check the persistent cooldown for this specific job type — this works
-	-- correctly even if the player just rejoined or switched servers, since
-	-- it's based on real-world time saved in their actual player data.
-	local remaining = PlayerDataService.GetCooldownRemaining(player, jobType, COOLDOWN_SECONDS)
-	if remaining > 0 then
-		return false, ("Wait %d more second(s) before doing this job again."):format(math.ceil(remaining))
 	end
 
 	activeSessions[player] = {
@@ -168,14 +146,11 @@ completeJobFunction.OnServerInvoke = function(player, jobType, score)
 
 	PlayerDataService.AddCash(player, payout)
 	activeSessions[player] = nil
-	PlayerDataService.SetCooldown(player, jobType)
 
 	return true, ("Earned $%d!"):format(payout), payout
 end
 
--- === Clean up active session tracking if a player disconnects mid-job ===
--- (No cooldown cleanup needed here anymore — cooldowns live in persistent
--- player data now, saved/cleaned up by PlayerDataService itself.)
+-- === Clean up if a player disconnects mid-job ===
 Players.PlayerRemoving:Connect(function(player)
 	activeSessions[player] = nil
 end)
