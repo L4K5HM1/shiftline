@@ -24,25 +24,7 @@ local Players = game:GetService("Players")
 local PlayerDataService = {}
 
 local DATASTORE_NAME = "CarGame_PlayerData_v1"
-
--- Wrap in pcall: DataStores are blocked in unpublished places, and would
--- otherwise crash this entire module (and everything that requires it).
--- If unavailable, we fall back to in-memory-only data so you can still
--- test the game in Studio — it just won't persist between sessions
--- until the place is published (see notes at bottom of this file).
-local dataStore
-local dataStoreAvailable = false
-do
-	local success, result = pcall(function()
-		return DataStoreService:GetDataStore(DATASTORE_NAME)
-	end)
-	if success then
-		dataStore = result
-		dataStoreAvailable = true
-	else
-		warn("[PlayerDataService] DataStore unavailable (place likely not published, or API access is off). Running in TEMPORARY in-memory mode — progress will NOT be saved.")
-	end
-end
+local dataStore = DataStoreService:GetDataStore(DATASTORE_NAME)
 
 -- In-memory cache: [player] = dataTable
 local cache = {}
@@ -59,7 +41,6 @@ local DEFAULT_DATA = {
 		Brand = "Honda",
 		Model = "Civic 2001",
 	},
-	JobCooldowns = {}, -- [jobType] = os.time() of last completion, persists across servers
 }
 
 --[[ Deep copy helper so we never accidentally share tables between players ]]
@@ -93,26 +74,21 @@ end
 
 --[[ Load a player's data on join ]]
 local function loadData(player)
+	local key = "Player_" .. player.UserId
+	local success, result = retry(function()
+		return dataStore:GetAsync(key)
+	end)
+
 	local data
-
-	if dataStoreAvailable then
-		local key = "Player_" .. player.UserId
-		local success, result = retry(function()
-			return dataStore:GetAsync(key)
-		end)
-
-		if success and result then
-			data = result
-			-- Backfill any new default fields for players with old save data
-			for k, v in pairs(DEFAULT_DATA) do
-				if data[k] == nil then
-					data[k] = deepCopy(v)
-				end
+	if success and result then
+		data = result
+		-- Backfill any new default fields for players with old save data
+		for k, v in pairs(DEFAULT_DATA) do
+			if data[k] == nil then
+				data[k] = deepCopy(v)
 			end
 		end
-	end
-
-	if not data then
+	else
 		data = deepCopy(DEFAULT_DATA)
 	end
 
@@ -122,10 +98,6 @@ end
 
 --[[ Save a player's data (call on leave, on autosave, and after big purchases) ]]
 local function saveData(player)
-	if not dataStoreAvailable then
-		return -- nothing to save to; running in temporary in-memory mode
-	end
-
 	local data = cache[player]
 	if not data then return end
 
@@ -190,31 +162,6 @@ function PlayerDataService.GetCurrentCar(player)
 	local data = cache[player]
 	if not data then return nil end
 	return data.CurrentCar
-end
-
---[[ Returns how many seconds remain before this job's cooldown expires (0 if none) ]]
-function PlayerDataService.GetCooldownRemaining(player, jobType, cooldownSeconds)
-	local data = cache[player]
-	if not data or not data.JobCooldowns then return 0 end
-
-	local lastCompletedAt = data.JobCooldowns[jobType]
-	if not lastCompletedAt then return 0 end
-
-	-- os.time() is real-world Unix time, consistent across every server —
-	-- unlike os.clock(), which resets per server session and would let
-	-- players bypass the cooldown just by rejoining or server-hopping.
-	local elapsed = os.time() - lastCompletedAt
-	return math.max(0, cooldownSeconds - elapsed)
-end
-
---[[ Records that this job type was just completed, starting its cooldown ]]
-function PlayerDataService.SetCooldown(player, jobType)
-	local data = cache[player]
-	if not data then return end
-	if not data.JobCooldowns then
-		data.JobCooldowns = {}
-	end
-	data.JobCooldowns[jobType] = os.time()
 end
 
 --[[ Bindable-style event so UI/other scripts can react to cash changes.
