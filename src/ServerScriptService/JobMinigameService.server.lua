@@ -33,41 +33,20 @@ local Players = game:GetService("Players")
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
 
 -- === Per-job payout tuning ===
--- type = "lowerIsBetter" (e.g. Card Matching moves — fewer is better)
---        or "higherIsBetter" (e.g. Quick Math correct answers — more is better)
--- basePayout = what you earn for a perfect run
+-- basePayout = what you earn for a "perfect" run
 -- floorPayout = minimum you still earn even if you barely scrape by
--- minValue/maxValue = the plausible range for the submitted score (used both
---   to calculate payout and to reject implausible/faked results)
+-- minMoves = the best possible score (used as the zero-penalty baseline)
+-- maxMoves = anything above this is treated as implausible and rejected
 -- minSeconds = fastest a real human could plausibly finish (anti-instant-complete)
 -- maxSeconds = session expires after this long
 local PAYOUT_CONFIG = {
 	["Card Matching"] = {
-		type = "lowerIsBetter",
 		basePayout = 25,
 		floorPayout = 10,
-		minValue = 8,   -- 8 pairs = 8 perfect moves
-		maxValue = 60,
+		minMoves = 8,   -- 8 pairs = 8 perfect moves
+		maxMoves = 60,
 		minSeconds = 3,
 		maxSeconds = 300,
-	},
-	["Quick Math"] = {
-		type = "higherIsBetter",
-		basePayout = 25,
-		floorPayout = 8,
-		minValue = 0,   -- 0 correct out of 10
-		maxValue = 10,  -- all 10 correct
-		minSeconds = 5, -- can't legitimately solve 10 problems faster than this
-		maxSeconds = 180,
-	},
-	["Pattern Memory"] = {
-		type = "higherIsBetter",
-		basePayout = 25,
-		floorPayout = 8,
-		minValue = 0,   -- failed on round 1 (or never got past it)
-		maxValue = 10,  -- survived all 10 rounds
-		minSeconds = 5, -- can't legitimately clear multiple rounds faster than this
-		maxSeconds = 240,
 	},
 }
 
@@ -96,23 +75,10 @@ end
 -- === Active sessions: [player] = { jobType = string, startTime = number } ===
 local activeSessions = {}
 
--- Cooldown duration — actual timestamps are now stored persistently in
--- PlayerDataService (via GetCooldownRemaining / SetCooldown), so this
--- survives players leaving, rejoining, or switching servers.
-local COOLDOWN_SECONDS = 60
-
 startJobFunction.OnServerInvoke = function(player, jobType)
 	local config = PAYOUT_CONFIG[jobType]
 	if not config then
 		return false, "Unknown job type."
-	end
-
-	-- Check the persistent cooldown for this specific job type — this works
-	-- correctly even if the player just rejoined or switched servers, since
-	-- it's based on real-world time saved in their actual player data.
-	local remaining = PlayerDataService.GetCooldownRemaining(player, jobType, COOLDOWN_SECONDS)
-	if remaining > 0 then
-		return false, ("Wait %d more second(s) before doing this job again."):format(math.ceil(remaining))
 	end
 
 	activeSessions[player] = {
@@ -123,7 +89,7 @@ startJobFunction.OnServerInvoke = function(player, jobType)
 	return true, "Job started."
 end
 
-completeJobFunction.OnServerInvoke = function(player, jobType, score)
+completeJobFunction.OnServerInvoke = function(player, jobType, movesUsed)
 	local config = PAYOUT_CONFIG[jobType]
 	if not config then
 		return false, "Unknown job type.", 0
@@ -146,36 +112,22 @@ completeJobFunction.OnServerInvoke = function(player, jobType, score)
 		return false, "Session expired — start the job again.", 0
 	end
 
-	if type(score) ~= "number" or score < config.minValue or score > config.maxValue then
+	if type(movesUsed) ~= "number" or movesUsed < config.minMoves or movesUsed > config.maxMoves then
 		activeSessions[player] = nil
 		return false, "Invalid result — try again.", 0
 	end
 
-	local payout
-	if config.type == "lowerIsBetter" then
-		-- e.g. Card Matching: fewer moves = closer to minValue = better
-		local penalty = score - config.minValue
-		payout = math.clamp(config.basePayout - penalty, config.floorPayout, config.basePayout)
-	else
-		-- "higherIsBetter", e.g. Quick Math: more correct = closer to maxValue = better
-		local fraction = (score - config.minValue) / (config.maxValue - config.minValue)
-		payout = math.clamp(
-			math.floor(config.floorPayout + (config.basePayout - config.floorPayout) * fraction),
-			config.floorPayout,
-			config.basePayout
-		)
-	end
+	-- Payout scales down from basePayout as moves increase past the perfect score
+	local penalty = movesUsed - config.minMoves
+	local payout = math.clamp(config.basePayout - penalty, config.floorPayout, config.basePayout)
 
 	PlayerDataService.AddCash(player, payout)
 	activeSessions[player] = nil
-	PlayerDataService.SetCooldown(player, jobType)
 
 	return true, ("Earned $%d!"):format(payout), payout
 end
 
--- === Clean up active session tracking if a player disconnects mid-job ===
--- (No cooldown cleanup needed here anymore — cooldowns live in persistent
--- player data now, saved/cleaned up by PlayerDataService itself.)
+-- === Clean up if a player disconnects mid-job ===
 Players.PlayerRemoving:Connect(function(player)
 	activeSessions[player] = nil
 end)
