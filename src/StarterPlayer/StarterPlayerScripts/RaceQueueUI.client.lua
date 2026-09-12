@@ -59,7 +59,7 @@ padding.Parent = mainFrame
 
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Name = "Title"
-titleLabel.Size = UDim2.new(1, -26, 0, 22)
+titleLabel.Size = UDim2.new(1, 0, 0, 22)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "NEXT RACE"
 titleLabel.TextColor3 = Color3.fromRGB(255, 200, 60)
@@ -67,21 +67,6 @@ titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 16
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = mainFrame
-
-local minimizeButton = Instance.new("TextButton")
-minimizeButton.Name = "MinimizeButton"
-minimizeButton.Size = UDim2.new(0, 22, 0, 22)
-minimizeButton.Position = UDim2.new(1, -22, 0, 0)
-minimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 58)
-minimizeButton.Text = "-"
-minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizeButton.Font = Enum.Font.GothamBold
-minimizeButton.TextSize = 18
-minimizeButton.Parent = mainFrame
-
-local minimizeButtonCorner = Instance.new("UICorner")
-minimizeButtonCorner.CornerRadius = UDim.new(0, 6)
-minimizeButtonCorner.Parent = minimizeButton
 
 local timerLabel = Instance.new("TextLabel")
 timerLabel.Name = "Timer"
@@ -123,75 +108,18 @@ local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(0, 8)
 buttonCorner.Parent = joinButton
 
--- === Collapsed / minimized icon (bottom-right corner) ===
-local minimizedFrame = Instance.new("Frame")
-minimizedFrame.Name = "MinimizedIcon"
-minimizedFrame.Size = UDim2.new(0, 70, 0, 70)
-minimizedFrame.Position = UDim2.new(1, -90, 1, -90) -- bottom-right corner
-minimizedFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-minimizedFrame.BackgroundTransparency = 0.15
-minimizedFrame.BorderSizePixel = 0
-minimizedFrame.Visible = false
-minimizedFrame.Parent = screenGui
-
-local minimizedCorner = Instance.new("UICorner")
-minimizedCorner.CornerRadius = UDim.new(1, 0) -- fully round pill/circle
-minimizedCorner.Parent = minimizedFrame
-
-local minimizedButton = Instance.new("TextButton")
-minimizedButton.Name = "RestoreButton"
-minimizedButton.Size = UDim2.new(1, 0, 1, 0)
-minimizedButton.BackgroundTransparency = 1
-minimizedButton.Text = ""
-minimizedButton.Parent = minimizedFrame
-
-local minimizedTimerLabel = Instance.new("TextLabel")
-minimizedTimerLabel.Name = "MiniTimer"
-minimizedTimerLabel.Size = UDim2.new(1, 0, 0, 20)
-minimizedTimerLabel.Position = UDim2.new(0, 0, 0, 14)
-minimizedTimerLabel.BackgroundTransparency = 1
-minimizedTimerLabel.Text = "5:00"
-minimizedTimerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizedTimerLabel.Font = Enum.Font.GothamBold
-minimizedTimerLabel.TextSize = 16
-minimizedTimerLabel.Parent = minimizedFrame
-
-local minimizedSubLabel = Instance.new("TextLabel")
-minimizedSubLabel.Name = "MiniLabel"
-minimizedSubLabel.Size = UDim2.new(1, 0, 0, 14)
-minimizedSubLabel.Position = UDim2.new(0, 0, 0, 36)
-minimizedSubLabel.BackgroundTransparency = 1
-minimizedSubLabel.Text = "RACE"
-minimizedSubLabel.TextColor3 = Color3.fromRGB(255, 200, 60)
-minimizedSubLabel.Font = Enum.Font.GothamBold
-minimizedSubLabel.TextSize = 11
-minimizedSubLabel.Parent = minimizedFrame
-
--- === A small toast notification for "Race starting!" (since no race scene yet) ===
-local TextService = game:GetService("TextService")
-
+-- === A small toast notification for "Race starting!" (since no race scene exists yet) ===
 local function showToast(text, color)
-	local font = Enum.Font.GothamBold
-	local textSize = 16
-	local maxWidth = 380
-	local horizontalPadding = 24
-	local verticalPadding = 14
-
-	-- Measure the text so the toast always fits it, up to maxWidth, then wraps
-	local textBounds = TextService:GetTextSize(text, textSize, font, Vector2.new(maxWidth, math.huge))
-	local toastWidth = math.min(maxWidth, textBounds.X + horizontalPadding * 2)
-	local toastHeight = textBounds.Y + verticalPadding * 2
-
 	local toast = Instance.new("TextLabel")
-	toast.Size = UDim2.new(0, toastWidth, 0, toastHeight)
-	toast.Position = UDim2.new(0.5, -toastWidth / 2, 0, -toastHeight - 20)
+	toast.Size = UDim2.new(0, 280, 0, 44)
+	toast.Position = UDim2.new(0.5, -140, 0, -60)
+	toast.AnchorPoint = Vector2.new(0, 0)
 	toast.BackgroundColor3 = color or Color3.fromRGB(40, 40, 45)
 	toast.BackgroundTransparency = 0.1
 	toast.Text = text
-	toast.TextWrapped = true
 	toast.TextColor3 = Color3.fromRGB(255, 255, 255)
-	toast.Font = font
-	toast.TextSize = textSize
+	toast.Font = Enum.Font.GothamBold
+	toast.TextSize = 16
 	toast.Parent = screenGui
 
 	local toastCorner = Instance.new("UICorner")
@@ -199,14 +127,14 @@ local function showToast(text, color)
 	toastCorner.Parent = toast
 
 	local slideIn = TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Position = UDim2.new(0.5, -toastWidth / 2, 0, 20),
+		Position = UDim2.new(0.5, -140, 0, 20),
 	})
 	slideIn:Play()
 
 	task.wait(3)
 
 	local slideOut = TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		Position = UDim2.new(0.5, -toastWidth / 2, 0, -toastHeight - 20),
+		Position = UDim2.new(0.5, -140, 0, -60),
 	})
 	slideOut:Play()
 	slideOut.Completed:Wait()
@@ -231,17 +159,6 @@ local function updateButtonVisual()
 		joinButton.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
 	end
 end
-
--- === Minimize / restore handlers ===
-minimizeButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = false
-	minimizedFrame.Visible = true
-end)
-
-minimizedButton.MouseButton1Click:Connect(function()
-	mainFrame.Visible = true
-	minimizedFrame.Visible = false
-end)
 
 -- === Button click handler ===
 joinButton.MouseButton1Click:Connect(function()
@@ -270,15 +187,15 @@ end)
 
 -- === Live countdown + queue count updates ===
 queueTickEvent.OnClientEvent:Connect(function(timeRemaining, queueCount)
-	local formatted = formatTime(timeRemaining)
-	timerLabel.Text = formatted
-	minimizedTimerLabel.Text = formatted
+	timerLabel.Text = formatTime(timeRemaining)
 	queueCountLabel.Text = queueCount .. (queueCount == 1 and " player queued" or " players queued")
 
 	-- Flash red in the last 10 seconds so it feels urgent
-	local urgentColor = timeRemaining <= 10
-	timerLabel.TextColor3 = urgentColor and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(255, 255, 255)
-	minimizedTimerLabel.TextColor3 = urgentColor and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(255, 255, 255)
+	if timeRemaining <= 10 then
+		timerLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+	else
+		timerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	end
 end)
 
 -- === Race started — only fires for players who actually got into a race group ===
