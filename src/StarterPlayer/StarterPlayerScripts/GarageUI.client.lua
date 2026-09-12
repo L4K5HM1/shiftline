@@ -190,8 +190,8 @@ local tabButtons = {} -- [brandName] = button, for highlight state
 -- Scrolling car list
 local carListFrame = Instance.new("ScrollingFrame")
 carListFrame.Name = "CarList"
-carListFrame.Size = UDim2.new(1, -32, 1, -174)
-carListFrame.Position = UDim2.new(0, 16, 0, 114)
+carListFrame.Size = UDim2.new(1, -32, 1, -160)
+carListFrame.Position = UDim2.new(0, 16, 0, 100)
 carListFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
 carListFrame.BorderSizePixel = 0
 carListFrame.ScrollBarThickness = 6
@@ -226,18 +226,6 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 14
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = garageFrame
-
-local hintLabel = Instance.new("TextLabel")
-hintLabel.Name = "HintLabel"
-hintLabel.Size = UDim2.new(1, -32, 0, 16)
-hintLabel.Position = UDim2.new(0, 16, 0, 96)
-hintLabel.BackgroundTransparency = 1
-hintLabel.Text = "Own it here, then visit the dealership in the world to actually drive it."
-hintLabel.TextColor3 = Color3.fromRGB(140, 140, 148)
-hintLabel.Font = Enum.Font.Gotham
-hintLabel.TextSize = 12
-hintLabel.TextXAlignment = Enum.TextXAlignment.Left
-hintLabel.Parent = garageFrame
 
 -- === Helpers ===
 
@@ -425,11 +413,19 @@ local function createCarCard(brand, model)
 		actionButton.BackgroundColor3 = Color3.fromRGB(70, 70, 78)
 		actionButton.Active = false
 	elseif isOwned(brand, model.name) then
-		actionButton.Text = "OWNED"
-		actionButton.BackgroundColor3 = Color3.fromRGB(60, 90, 110)
-		actionButton.Active = false
-		-- Player already owns this car, but picking it as their current ride
-		-- now happens physically at the dealership (ProximityPrompt), not here.
+		actionButton.Text = "SELECT"
+		actionButton.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
+		actionButton.MouseButton1Click:Connect(function()
+			actionButton.Active = false
+			local success, message = selectCarFunction:InvokeServer(brand, model.name)
+			showStatus(message, not success)
+			showToast(message, not success)
+			if success then
+				localData.CurrentCar = { Brand = brand, Model = model.name }
+				renderBrand(selectedBrand) -- refresh so "CURRENT CAR" state updates
+			end
+			actionButton.Active = true
+		end)
 	else
 		actionButton.Text = model.price == 0 and "FREE" or ("BUY " .. formatMoney(model.price))
 		actionButton.BackgroundColor3 = Color3.fromRGB(210, 160, 40)
@@ -440,7 +436,7 @@ local function createCarCard(brand, model)
 			showToast(message, not success)
 			if success then
 				localData.OwnedCars[brand .. "_" .. model.name] = true
-				renderBrand(selectedBrand) -- refresh so it now shows OWNED
+				renderBrand(selectedBrand) -- refresh so it now shows SELECT
 			end
 			actionButton.Active = true
 		end)
