@@ -156,8 +156,8 @@ local function createDealership(brandName, position, color)
 
 	-- Tag the SIGN (not the building) so DealershipInteraction.server.lua
 	-- attaches its "Pick Up Car" ProximityPrompt somewhere actually reachable.
-	CollectionService:AddTag(sign, "DealershipTrigger")
 	sign:SetAttribute("Brand", brandName)
+	CollectionService:AddTag(sign, "DealershipTrigger")
 end
 
 local function createJobLocation(name, position, color)
@@ -188,8 +188,8 @@ local function createJobLocation(name, position, color)
 
 	addLabel(sign, "START: " .. name, color)
 
-	CollectionService:AddTag(sign, "JobTrigger")
 	sign:SetAttribute("JobType", name)
+	CollectionService:AddTag(sign, "JobTrigger")
 end
 
 -- === Dealership location pool: 8 possible spots, only 4 used per server ===

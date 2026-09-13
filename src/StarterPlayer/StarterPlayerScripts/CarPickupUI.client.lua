@@ -132,7 +132,10 @@ local function createPickupRow(brand, modelName)
 
 	driveButton.MouseButton1Click:Connect(function()
 		driveButton.Active = false
-		local success, message = selectCarFunction:InvokeServer(brand, modelName)
+		local connected, success, message = pcall(function()
+			return selectCarFunction:InvokeServer(brand, modelName)
+		end)
+		if not connected then success, message = false, "Connection interrupted. Please try again." end
 		if success then
 			pickupFrame.Visible = false
 		else

@@ -2,6 +2,8 @@
 
 A Luau game prototype combining car ownership, three job minigames, a generated hub, and a timed race queue.
 
+> Reliability improvements are isolated on `fix/reliability-and-validation`. See [changes and testing](docs/RELIABILITY.md). The main branch remains unchanged.
+
 ## Implemented systems
 
 - **Economy:** player cash, owned cars, current selection, autosave, and shutdown saves through a shared data module.
@@ -32,7 +34,7 @@ Descriptive script names are retained because modules are referenced by name. Up
 
 ## Review status
 
-Repository organization, source preservation, and dependency names were checked locally. Roblox Studio execution and multiplayer behavior have not been tested in this environment. See the setup checklist before treating this prototype as release-ready.
+All 17 Luau source files compile. The automated suite covers profile/economy failures and actual job handlers with mocked services. Run `npm ci` and `npm test` with Node.js 20+ to reproduce these checks. Roblox Studio execution and multiplayer behavior have not been tested in this environment. See the setup checklist before treating this prototype as release-ready.
 
 ## Author
 

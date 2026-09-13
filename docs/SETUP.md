@@ -4,10 +4,10 @@ Use a separate test place. This is a scripts-only import; no `.rbxl` or `.rbxlx`
 
 1. Create a baseplate place in Roblox Studio.
 2. Put the contents of `src/ReplicatedStorage/CarConfig.lua` into a ModuleScript named `CarConfig` in ReplicatedStorage.
-3. In ServerScriptService, create a ModuleScript for each plain `.lua` file (`PlayerDataService`, `RaceQueueService`) and a Script for each `.server.lua` file. Copy the matching code into each. Remove filename extensions from Studio instance names.
+3. In ServerScriptService, create a ModuleScript for each plain `.lua` file (`PlayerDataService`, `ProfileStore`, `InteractionGuard`, `RaceQueueService`) and a Script for each `.server.lua` file. Copy the matching code into each. Remove filename extensions from Studio instance names.
 4. In StarterPlayer > StarterPlayerScripts, create one LocalScript per `.client.lua` file and copy its code. Use the filename without `.client.lua` as its instance name.
 5. Do not insert multiple archived versions of the same script. Server scripts create the remote objects at runtime; the map script generates the prototype hub.
-6. For persistence testing, publish a separate test place and configure Studio API access in its settings. Do not test against live player saves. DataStore initialization has an in-memory fallback, but a later failed read is not safely handled as a distinct load failure; see the limitations document.
+6. For persistence testing, publish a separate test experience and configure Studio API access in its settings. Do not test against live player saves. Failed loads disconnect the player instead of substituting default data. For a local session without persistence, explicitly add a boolean `UseMockData` attribute set to `true` on the `PlayerDataService` ModuleScript; this setting is honored only in Studio. See [reliability notes](RELIABILITY.md).
 7. Start a Studio play session and check Output for errors.
 
 ## Manual acceptance checklist (not yet executed)

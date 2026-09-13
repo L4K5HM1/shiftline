@@ -1,6 +1,6 @@
 --[[
 	PatternMemoryUI.client.lua
-	LocalScript — place in StarterGui
+	LocalScript — place in StarterPlayerScripts
 
 	Listens for the OpenJobMinigame RemoteEvent (fired when a player interacts
 	with a "Pattern Memory" job station). Classic Simon Says: watch a growing
@@ -23,6 +23,29 @@ local jobRemotes = ReplicatedStorage:WaitForChild("JobRemotes")
 local openJobMinigameEvent = jobRemotes:WaitForChild("OpenJobMinigame")
 local startJobFunction = jobRemotes:WaitForChild("StartJob")
 local completeJobFunction = jobRemotes:WaitForChild("CompleteJob")
+local cancelJobEvent = jobRemotes:WaitForChild("CancelJob")
+local sessionToken = nil
+local sessionVersion = 0
+local starting = false
+local function cancelSession()
+ sessionVersion += 1
+ if sessionToken then cancelJobEvent:FireServer(sessionToken) end
+ sessionToken = nil
+end
+local function completeSession(job, score)
+ local token = sessionToken
+ if not token then return false, "No active job." end
+ sessionToken = nil -- a completed session can only be submitted once
+ local ok, success, message, payout = pcall(function()
+  return completeJobFunction:InvokeServer(job, score, token)
+ end)
+ if not ok then
+  cancelJobEvent:FireServer(token)
+  return false, "Connection interrupted. Please start again."
+ end
+ return success, message, payout
+end
+
 
 -- === Game constants ===
 local TARGET_ROUNDS = 10 -- surviving all 10 rounds = perfect score
@@ -89,6 +112,7 @@ closeButtonCorner.CornerRadius = UDim.new(0, 8)
 closeButtonCorner.Parent = closeButton
 
 closeButton.MouseButton1Click:Connect(function()
+	cancelSession()
 	gameFrame.Visible = false
 end)
 
@@ -155,23 +179,29 @@ local isPlayingBack = false
 
 --[[ Briefly lights up one pad ]]
 local function flashPad(padIndex)
+	local runVersion = sessionVersion
 	local pad = padButtons[padIndex]
 	pad.BackgroundColor3 = PADS[padIndex].lit
 	task.wait(FLASH_ON_TIME)
+	if runVersion ~= sessionVersion then return end
 	pad.BackgroundColor3 = PADS[padIndex].dim
 	task.wait(FLASH_GAP_TIME)
+	if runVersion ~= sessionVersion then return end
 end
 
 --[[ Plays back the entire sequence so far, then opens up player input ]]
 local function playbackSequence()
+	local runVersion = sessionVersion
 	acceptingInput = false
 	isPlayingBack = true
 	statusLabel.Text = "Watch closely... (Round " .. currentRound .. " / " .. TARGET_ROUNDS .. ")"
 
 	task.wait(0.5) -- brief pause before playback so the player can get ready
+	if runVersion ~= sessionVersion then return end
 
 	for _, padIndex in ipairs(sequence) do
 		flashPad(padIndex)
+		if runVersion ~= sessionVersion then return end
 	end
 
 	isPlayingBack = false
@@ -182,13 +212,15 @@ end
 
 --[[ Ends the game (success or failure) and submits the score ]]
 local function finishGame(scoreAchieved)
+	local runVersion = sessionVersion
 	acceptingInput = false
 
 	task.spawn(function()
 		resultLabel.Text = "Submitting..."
 		resultLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 
-		local success, message = completeJobFunction:InvokeServer("Pattern Memory", scoreAchieved)
+		local success, message = completeSession("Pattern Memory", scoreAchieved)
+		if runVersion ~= sessionVersion then return end
 
 		if success then
 			resultLabel.Text = message
@@ -199,6 +231,7 @@ local function finishGame(scoreAchieved)
 		end
 
 		task.wait(2)
+		if runVersion ~= sessionVersion then return end
 		gameFrame.Visible = false
 	end)
 end
@@ -211,7 +244,8 @@ local function startNextRound()
 end
 
 local function onPadClicked(padIndex)
-	if not acceptingInput or isPlayingBack then return end
+	local runVersion = sessionVersion
+	if not sessionToken or not acceptingInput or isPlayingBack then return end
 
 	playerInputIndex += 1
 	local expectedPad = sequence[playerInputIndex]
@@ -222,6 +256,7 @@ local function onPadClicked(padIndex)
 		local pad = padButtons[padIndex]
 		pad.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
 		task.wait(0.4)
+		if runVersion ~= sessionVersion then return end
 		pad.BackgroundColor3 = PADS[padIndex].dim
 
 		statusLabel.Text = "Wrong! Survived " .. (currentRound - 1) .. " round(s)."
@@ -233,6 +268,7 @@ local function onPadClicked(padIndex)
 	local pad = padButtons[padIndex]
 	pad.BackgroundColor3 = PADS[padIndex].lit
 	task.wait(0.15)
+	if runVersion ~= sessionVersion then return end
 	pad.BackgroundColor3 = PADS[padIndex].dim
 
 	if playerInputIndex >= #sequence then
@@ -245,6 +281,7 @@ local function onPadClicked(padIndex)
 		else
 			statusLabel.Text = "Correct! Next round incoming..."
 			task.wait(ROUND_TRANSITION_DELAY)
+			if runVersion ~= sessionVersion then return end
 			startNextRound()
 		end
 	end
@@ -258,6 +295,26 @@ end
 
 --[[ Resets everything and starts a brand new game ]]
 local function startNewGame()
+ if starting or sessionToken then return end
+ starting = true
+ sessionVersion += 1
+ local version = sessionVersion
+ resultLabel.Text = "Starting..."
+ local ok, accepted, message, token = pcall(function()
+  return startJobFunction:InvokeServer("Pattern Memory")
+ end)
+ starting = false
+ if version ~= sessionVersion or not gameFrame.Visible then
+  if ok and accepted and token then cancelJobEvent:FireServer(token) end
+  return
+ end
+ if not ok or not accepted then
+  resultLabel.Text = ok and message or "Unable to start. Please try again."
+  resultLabel.TextColor3 = Color3.fromRGB(230, 100, 100)
+  return
+ end
+ sessionToken = token
+
 	sequence = {}
 	currentRound = 0
 	playerInputIndex = 0
@@ -270,7 +327,7 @@ local function startNewGame()
 	end
 
 	-- Tell the server a session is starting (used to validate the eventual payout)
-	startJobFunction:InvokeServer("Pattern Memory")
+
 
 	startNextRound()
 end
@@ -281,6 +338,7 @@ openJobMinigameEvent.OnClientEvent:Connect(function(jobType)
 		return -- not our game — Card Matching / Quick Math have their own scripts
 	end
 
+	if gameFrame.Visible then return end
 	gameFrame.Visible = true
 	startNewGame()
 end)

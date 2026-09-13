@@ -1,6 +1,6 @@
 --[[
 	QuickMathUI.client.lua
-	LocalScript — place in StarterGui
+	LocalScript — place in StarterPlayerScripts
 
 	Listens for the OpenJobMinigame RemoteEvent (fired when a player interacts
 	with a "Quick Math" job station). Shows 10 simple math problems, one at a
@@ -23,6 +23,29 @@ local jobRemotes = ReplicatedStorage:WaitForChild("JobRemotes")
 local openJobMinigameEvent = jobRemotes:WaitForChild("OpenJobMinigame")
 local startJobFunction = jobRemotes:WaitForChild("StartJob")
 local completeJobFunction = jobRemotes:WaitForChild("CompleteJob")
+local cancelJobEvent = jobRemotes:WaitForChild("CancelJob")
+local sessionToken = nil
+local sessionVersion = 0
+local starting = false
+local function cancelSession()
+ sessionVersion += 1
+ if sessionToken then cancelJobEvent:FireServer(sessionToken) end
+ sessionToken = nil
+end
+local function completeSession(job, score)
+ local token = sessionToken
+ if not token then return false, "No active job." end
+ sessionToken = nil -- a completed session can only be submitted once
+ local ok, success, message, payout = pcall(function()
+  return completeJobFunction:InvokeServer(job, score, token)
+ end)
+ if not ok then
+  cancelJobEvent:FireServer(token)
+  return false, "Connection interrupted. Please start again."
+ end
+ return success, message, payout
+end
+
 
 -- === Game constants ===
 local TOTAL_PROBLEMS = 10
@@ -79,6 +102,7 @@ closeButtonCorner.CornerRadius = UDim.new(0, 8)
 closeButtonCorner.Parent = closeButton
 
 closeButton.MouseButton1Click:Connect(function()
+	cancelSession()
 	gameFrame.Visible = false
 end)
 
@@ -190,6 +214,7 @@ local function generateProblem()
 end
 
 local function loadNextProblem()
+	local runVersion = sessionVersion
 	if currentProblemIndex > TOTAL_PROBLEMS then
 		-- Finished all problems — submit the result
 		task.spawn(function()
@@ -198,7 +223,8 @@ local function loadNextProblem()
 			submitButton.Active = false
 			answerBox.TextEditable = false
 
-			local success, message = completeJobFunction:InvokeServer("Quick Math", correctCount)
+			local success, message = completeSession("Quick Math", correctCount)
+			if runVersion ~= sessionVersion then return end
 
 			if success then
 				resultLabel.Text = message
@@ -209,6 +235,7 @@ local function loadNextProblem()
 			end
 
 			task.wait(2)
+			if runVersion ~= sessionVersion then return end
 			gameFrame.Visible = false
 		end)
 		return
@@ -223,7 +250,8 @@ local function loadNextProblem()
 end
 
 local function submitAnswer()
-	if isBusy then return end
+	local runVersion = sessionVersion
+	if isBusy or not sessionToken then return end
 
 	local typedAnswer = tonumber(answerBox.Text)
 	if typedAnswer == nil then
@@ -240,8 +268,10 @@ local function submitAnswer()
 	end
 
 	task.wait(FEEDBACK_DELAY)
+	if runVersion ~= sessionVersion then return end
 
 	currentProblemIndex += 1
+	if runVersion ~= sessionVersion then return end
 	isBusy = false
 	loadNextProblem()
 end
@@ -256,6 +286,26 @@ end)
 
 --[[ Builds a brand new problem set and starts the server-side session ]]
 local function startNewGame()
+ if starting or sessionToken then return end
+ starting = true
+ sessionVersion += 1
+ local version = sessionVersion
+ resultLabel.Text = "Starting..."
+ local ok, accepted, message, token = pcall(function()
+  return startJobFunction:InvokeServer("Quick Math")
+ end)
+ starting = false
+ if version ~= sessionVersion or not gameFrame.Visible then
+  if ok and accepted and token then cancelJobEvent:FireServer(token) end
+  return
+ end
+ if not ok or not accepted then
+  resultLabel.Text = ok and message or "Unable to start. Please try again."
+  resultLabel.TextColor3 = Color3.fromRGB(230, 100, 100)
+  return
+ end
+ sessionToken = token
+
 	currentProblemIndex = 1
 	correctCount = 0
 	isBusy = false
@@ -266,7 +316,7 @@ local function startNewGame()
 	loadNextProblem()
 
 	-- Tell the server a session is starting (used to validate the eventual payout)
-	startJobFunction:InvokeServer("Quick Math")
+
 end
 
 -- === Listen for the job station interaction ===
@@ -275,6 +325,7 @@ openJobMinigameEvent.OnClientEvent:Connect(function(jobType)
 		return -- not our game — Card Matching / Pattern Memory have their own scripts
 	end
 
+	if gameFrame.Visible then return end
 	gameFrame.Visible = true
 	startNewGame()
 end)

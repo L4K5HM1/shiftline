@@ -19,6 +19,8 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
 local CarConfig = require(ReplicatedStorage:WaitForChild("CarConfig"))
+local Core = require(ServerScriptService:WaitForChild("ProfileStore"))
+local Guard = require(ServerScriptService:WaitForChild("InteractionGuard"))
 
 -- === Set up RemoteEvents/RemoteFunctions ===
 local remotesFolder = Instance.new("Folder")
@@ -64,26 +66,25 @@ end)
 
 -- === RemoteFunction: PurchaseCar ===
 purchaseCarFunction.OnServerInvoke = function(player, brand, model)
+	if not Guard.allowRequest(player, "purchase", 0.25) or not Core.validName(brand) or not Core.validName(model) then
+		return false, "Invalid request or requests too frequent."
+	end
 	local carData = CarConfig.GetCar(brand, model)
 	if not carData then
 		return false, "That car doesn't exist."
 	end
 
-	if PlayerDataService.OwnsCar(player, brand, model) then
-		return false, "You already own this car."
-	end
-
-	local success = PlayerDataService.SpendCash(player, carData.price)
-	if not success then
-		return false, "Not enough cash."
-	end
-
-	PlayerDataService.AddOwnedCar(player, brand, model)
-	return true, ("Purchased %s %s!"):format(brand, model)
+	return PlayerDataService.PurchaseCar(player, brand, model, carData.price)
 end
 
 -- === RemoteFunction: SelectCar ===
 selectCarFunction.OnServerInvoke = function(player, brand, model)
+	if not Guard.allowRequest(player, "select", 0.25) or not Core.validName(brand) or not Core.validName(model) then
+		return false, "Invalid request or requests too frequent."
+	end
+	if not CarConfig.GetCar(brand, model) or not Guard.near(player, "DealershipTrigger", "Brand", brand) then
+		return false, "Visit this brand's dealership to pick up your car."
+	end
 	local success = PlayerDataService.SetCurrentCar(player, brand, model)
 	if success then
 		return true, ("Now driving the %s %s."):format(brand, model)
@@ -94,6 +95,9 @@ end
 
 -- === RemoteFunction: GetPlayerData ===
 getPlayerDataFunction.OnServerInvoke = function(player)
+	if not Guard.allowRequest(player, "profile", 0.1) then return nil end
+	local deadline = os.clock() + 10
+	while player.Parent and not PlayerDataService.GetData(player) and os.clock() < deadline do task.wait(0.1) end
 	return PlayerDataService.GetData(player)
 end
 

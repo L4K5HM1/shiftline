@@ -435,7 +435,10 @@ local function createCarCard(brand, model)
 		actionButton.BackgroundColor3 = Color3.fromRGB(210, 160, 40)
 		actionButton.MouseButton1Click:Connect(function()
 			actionButton.Active = false
-			local success, message = purchaseCarFunction:InvokeServer(brand, model.name)
+			local connected, success, message = pcall(function()
+				return purchaseCarFunction:InvokeServer(brand, model.name)
+			end)
+			if not connected then success, message = false, "Connection interrupted. Reopen the garage to refresh." end
 			showStatus(message, not success)
 			showToast(message, not success)
 			if success then
@@ -501,10 +504,12 @@ end
 
 -- === Open / close handlers ===
 local function refreshPlayerDataAndOpen()
-	local data = getPlayerDataFunction:InvokeServer()
-	if data then
-		localData = data
+	local ok, data = pcall(function() return getPlayerDataFunction:InvokeServer() end)
+	if not ok or not data then
+		showToast("Player data is not ready. Please try again shortly.", true)
+		return
 	end
+	localData = data
 	cashLabel.Text = formatMoney(localData.Cash)
 	statusLabel.Text = ""
 	garageFrame.Visible = true
@@ -531,8 +536,8 @@ end)
 
 -- === Initial cash load on join ===
 task.spawn(function()
-	local data = getPlayerDataFunction:InvokeServer()
-	if data then
+	local ok, data = pcall(function() return getPlayerDataFunction:InvokeServer() end)
+	if ok and data then
 		localData = data
 		cashLabel.Text = formatMoney(localData.Cash)
 	end

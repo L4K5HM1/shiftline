@@ -7,3 +7,5 @@ Thumbs.db
 *.rbxl
 *.rbxlx
 *.rbxl.lock
+
+node_modules/

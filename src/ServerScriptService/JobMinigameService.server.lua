@@ -1,36 +1,16 @@
---[[
-	JobMinigameService.server.lua
-	Script — place in ServerScriptService
-
-	Validates job minigame sessions and pays out cash on completion.
-	Currently configured for "Card Matching" — more job types (Quick Math,
-	Pattern Memory) will register their own entry in PAYOUT_CONFIG later.
-
-	FLOW:
-		1. Client opens a minigame (after interacting with a job station)
-		2. Client calls StartJob(jobType) -> server records a session with a start time
-		3. Client plays the game itself (all game logic is client-side for
-		   Card Matching, since there's nothing sensitive to hide — the payout
-		   is what actually needs protecting, which is why it's validated here)
-		4. Client calls CompleteJob(jobType, movesUsed) when finished
-		5. Server checks:
-			- a session actually exists and matches jobType
-			- enough time has passed (blocks instant/scripted completions)
-			- not too much time has passed (session expired)
-			- movesUsed is a plausible number for that game (blocks fake low scores)
-		6. If valid, pays out cash via PlayerDataService and clears the session
-
-	RemoteFunctions (created in ReplicatedStorage.JobRemotes, alongside the
-	OpenJobMinigame RemoteEvent from JobStationInteraction.server.lua):
-		StartJob(jobType)               -> success (bool), message (string)
-		CompleteJob(jobType, movesUsed) -> success (bool), message (string), payout (number)
-]]
+-- Validates token-bound sessions for Card Matching, Quick Math and Pattern Memory.
+-- Scores remain client-reported: timing/range checks are not proof of completion.
+-- StartJob returns success, message, token; CompleteJob takes jobType, score, token.
+-- CancelJob releases an abandoned token. See docs/RELIABILITY.md.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
+local Core = require(ServerScriptService:WaitForChild("ProfileStore"))
+local Guard = require(ServerScriptService:WaitForChild("InteractionGuard"))
 
 -- === Per-job payout tuning ===
 -- type = "lowerIsBetter" (e.g. Card Matching moves — fewer is better)
@@ -95,6 +75,13 @@ end
 
 -- === Active sessions: [player] = { jobType = string, startTime = number } ===
 local activeSessions = {}
+local cancelJobEvent = Instance.new("RemoteEvent")
+cancelJobEvent.Name = "CancelJob"
+cancelJobEvent.Parent = jobRemotesFolder
+cancelJobEvent.OnServerEvent:Connect(function(player, token)
+	local session = activeSessions[player]
+	if session and session.token == token then activeSessions[player] = nil end
+end)
 
 -- Cooldown duration — actual timestamps are now stored persistently in
 -- PlayerDataService (via GetCooldownRemaining / SetCooldown), so this
@@ -102,9 +89,18 @@ local activeSessions = {}
 local COOLDOWN_SECONDS = 60
 
 startJobFunction.OnServerInvoke = function(player, jobType)
+	if not Guard.allowRequest(player, "start-job", 0.5) or not Core.validName(jobType) then
+		return false, "Invalid request or requests too frequent."
+	end
 	local config = PAYOUT_CONFIG[jobType]
 	if not config then
 		return false, "Unknown job type."
+	end
+	if not PlayerDataService.GetData(player) then return false, "Player data is not ready." end
+	if not Guard.near(player, "JobTrigger", "JobType", jobType) then return false, "Visit the job station to start." end
+	local previous = activeSessions[player]
+	if previous and os.clock() - previous.startTime <= PAYOUT_CONFIG[previous.jobType].maxSeconds then
+		return false, "Close your current job before starting another."
 	end
 
 	-- Check the persistent cooldown for this specific job type — this works
@@ -118,19 +114,21 @@ startJobFunction.OnServerInvoke = function(player, jobType)
 	activeSessions[player] = {
 		jobType = jobType,
 		startTime = os.clock(),
+		token = HttpService:GenerateGUID(false),
 	}
 
-	return true, "Job started."
+	return true, "Job started.", activeSessions[player].token
 end
 
-completeJobFunction.OnServerInvoke = function(player, jobType, score)
+completeJobFunction.OnServerInvoke = function(player, jobType, score, token)
+	if not Core.validName(jobType) then return false, "Invalid job.", 0 end
 	local config = PAYOUT_CONFIG[jobType]
 	if not config then
 		return false, "Unknown job type.", 0
 	end
 
 	local session = activeSessions[player]
-	if not session or session.jobType ~= jobType then
+	if not session or session.jobType ~= jobType or session.token ~= token then
 		return false, "No active session for this job.", 0
 	end
 
@@ -146,7 +144,7 @@ completeJobFunction.OnServerInvoke = function(player, jobType, score)
 		return false, "Session expired — start the job again.", 0
 	end
 
-	if type(score) ~= "number" or score < config.minValue or score > config.maxValue then
+	if not Core.isInteger(score, config.minValue, config.maxValue) then
 		activeSessions[player] = nil
 		return false, "Invalid result — try again.", 0
 	end
@@ -166,8 +164,8 @@ completeJobFunction.OnServerInvoke = function(player, jobType, score)
 		)
 	end
 
-	PlayerDataService.AddCash(player, payout)
 	activeSessions[player] = nil
+	if not PlayerDataService.AddCash(player, payout) then return false, "Player data is unavailable.", 0 end
 	PlayerDataService.SetCooldown(player, jobType)
 
 	return true, ("Earned $%d!"):format(payout), payout

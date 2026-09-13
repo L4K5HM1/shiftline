@@ -1,0 +1,1 @@
+{"name":"shiftline","private":true,"version":"0.2.0","scripts":{"test":"node tests/run.mjs"},"devDependencies":{"luau-web":"1.4.0"},"engines":{"node":">=20"}}
